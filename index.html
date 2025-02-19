@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>跨语界·智能搜索</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* 默认深色主题 */
+    :root {
+      --primary-color: #00f3ff;
+      --hover-color: #00b4d2;
+      --visited-color: #ffd700;
+      --clicked-color: #FF4500; /* 点击后的颜色 */
+      --background-dark: linear-gradient(135deg, #0f0c29 0%, #2a0845 50%, #0f0c29 100%);
+      --container-bg: rgba(255, 255, 255, 0.08);
+      --neon-shadow: 0 0 15px var(--primary-color);
+      --glass-border: 1px solid rgba(255,255,255,0.15);
+      --transition-speed: 0.3s;
+    }
+    /* Light-mode */
+    body.light-mode {
+      --primary-color: #1a73e8;
+      --hover-color: #1558b0;
+      --background-dark: #e8eaed;
+      --container-bg: #ffffff;
+      --neon-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+      --glass-border: 1px solid #dadce0;
+      color: #202124;
+    }
+    body.light-mode h1 { color: var(--primary-color); text-shadow: none; }
+    body.light-mode .input-group input { background: #f1f3f4; border: 1px solid #dadce0; color: #202124; }
+    body.light-mode .autocomplete-list { background: #ffffff; color: #202124; }
+    body.light-mode select { background: #f1f3f4; border: 1px solid #dadce0; color: #202124; }
+    body.light-mode button { background: var(--primary-color); color: #ffffff; border: none; }
+    body.light-mode button:hover { background: var(--hover-color); }
+    body.light-mode .history-item { background: #f1f3f4; color: #202124; border: 1px solid #dadce0; }
+    body.light-mode #history h3,
+    body.light-mode #favorites h3,
+    body.light-mode #uiSettings h3 { color: #202124; }
+    body.light-mode .modal-content { background: #ffffff; border: 1px solid #dadce0; color: #202124; }
+    body.light-mode .modal-close { color: var(--primary-color); }
+    /* 全局样式 */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; overflow-x: hidden; }
+    body { background: var(--background-dark); font-family: 'Poppins', sans-serif; min-height: 100vh; }
+    /* 自定义滚动条 */
+    .container::-webkit-scrollbar,
+    #output::-webkit-scrollbar,
+    #historyList::-webkit-scrollbar,
+    #favoritesList::-webkit-scrollbar { width: 10px; }
+    .container::-webkit-scrollbar-track,
+    #output::-webkit-scrollbar-track,
+    #historyList::-webkit-scrollbar-track,
+    #favoritesList::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.3); border-radius: 10px;
+    }
+    .container::-webkit-scrollbar-thumb,
+    #output::-webkit-scrollbar-thumb,
+    #historyList::-webkit-scrollbar-thumb,
+    #favoritesList::-webkit-scrollbar-thumb {
+      background: var(--primary-color); border-radius: 10px; box-shadow: 0 0 5px var(--primary-color);
+    }
+    .container,
+    #output,
+    #historyList,
+    #favoritesList { scrollbar-width: thin; scrollbar-color: var(--primary-color) rgba(0, 0, 0, 0.3); }
+    /* 动画背景 */
+    body::before {
+      content: ''; position: absolute; width: 200%; height: 200%;
+      background: linear-gradient(45deg, transparent 48%, rgba(0, 243, 255, 0.1) 50%, transparent 52%);
+      animation: gridAnim 20s linear infinite; z-index: -1;
+    }
+    @keyframes gridAnim {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    /* 主要容器 */
+    .container {
+      background: var(--container-bg); backdrop-filter: blur(12px);
+      border: var(--glass-border); border-radius: 16px; box-shadow: var(--neon-shadow);
+      padding: 2rem; width: 90%; max-width: 680px; max-height: 90vh;
+      overflow-y: auto; margin: 1rem auto; position: relative; z-index: 1;
+    }
+    h1 {
+      font-family: 'Orbitron', sans-serif; font-weight: 700;
+      color: var(--primary-color); text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+      letter-spacing: 2px; margin-bottom: 1.5rem; position: relative; padding-bottom: 0.5rem;
+      text-align: center;
+    }
+    h1::after {
+      content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 120px; height: 3px; background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+    }
+    /* 输入区 */
+    #inputWrapper { margin-bottom: 1rem; position: relative; }
+    .input-group { display: flex; gap: 0.8rem; position: relative; }
+    .input-group input {
+      flex: 1; padding: 0.8rem 1.2rem; background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff; font-size: 1rem;
+      transition: border-color var(--transition-speed);
+    }
+    .input-group input:focus { outline: none; border-color: var(--primary-color); box-shadow: var(--neon-shadow); }
+    /* 增加语音输入按钮 */
+    #voiceBtn {
+      padding: 0.8rem; background: transparent; border: none; font-size: 1.2rem; cursor: pointer;
+    }
+    /* 新增语音状态反馈 */
+    #voiceStatus {
+      color: #fff;
+      text-align: center;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+    /* 新增语音提示：这里给出了更多可能的提示词，供用户参考 */
+    #voiceTip {
+      color: rgba(255,255,255,0.8);
+      font-size: 0.85rem;
+      margin-top: 5px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    /* 自动补全列表 */
+    .autocomplete-list {
+      position: absolute; top: calc(100% + 5px); left: 0; right: 0;
+      background: rgba(0,0,0,0.8); border-radius: 8px; max-height: 150px; overflow-y: auto; z-index: 1000; display: none;
+    }
+    .autocomplete-item { padding: 0.8rem; cursor: pointer; transition: background var(--transition-speed); color: #fff; }
+    .autocomplete-item:hover, .autocomplete-item:focus { background: rgba(0,243,255,0.1); }
+    #inputHint { color: rgba(255,255,255,0.7); font-size: 0.9rem; margin: 0.5rem 0 1.5rem; }
+    /* 按钮 */
+    button {
+      padding: 0.8rem 1.5rem; border: none; border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary-color), var(--hover-color));
+      color: #000; font-family: 'Orbitron', sans-serif; font-weight: 700; cursor: pointer;
+      transition: background var(--transition-speed); position: relative; overflow: hidden;
+    }
+    button:focus { outline: none; box-shadow: var(--neon-shadow); }
+    button::after {
+      content: ''; position: absolute; top: -50%; left: -50%;
+      width: 200%; height: 200%; background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+      transform: rotate(45deg); animation: buttonGlow 3s infinite linear; pointer-events: none;
+    }
+    @keyframes buttonGlow { 0% { transform: translateX(-100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
+    /* 点击后状态 */
+    .clicked { background-color: var(--clicked-color) !important; color: #fff !important; }
+    /* 搜索引擎与翻译引擎选择 */
+    .search-engine-group, .translation-engine-group {
+      display: grid; grid-template-columns: 1fr auto; gap: 0.8rem; align-items: center; margin: 1.5rem 0;
+    }
+    select { width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff; appearance: none; }
+    /* 高级搜索设置区域 */
+    #advancedOptions {
+      background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px; margin: 1rem 0; color: #fff; display: none;
+    }
+    #advancedOptions h3 { margin-top: 0; }
+    #advancedOptions label { display: block; margin: 0.5rem 0; }
+    /* 界面设置区域 */
+    #uiSettings {
+      background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px; margin: 1rem auto; color: #fff; display: none; max-width: 500px;
+    }
+    #uiSettings h3 { margin-top: 0; }
+    #uiSettings label { display: block; margin: 0.5rem 0; }
+    /* “显示界面设置”按钮（保持在主容器内） */
+    #toggleUIBtn {
+      background: transparent; border: none; color: var(--primary-color); font-size: 1rem; cursor: pointer;
+      margin-bottom: 0.5rem; text-decoration: underline;
+    }
+    /* 翻译结果卡片样式 */
+    .translation-item {
+      background: rgba(0,0,0,0.2); border: 1px solid rgba(0,243,255,0.1); border-radius: 8px;
+      padding: 1rem; transition: transform var(--transition-speed); color: #fff;
+    }
+    .translation-item:hover { transform: translateY(-3px); box-shadow: var(--neon-shadow); }
+    .translation-item .search-link {
+      display: inline-block; margin-top: 0.5rem; color: var(--primary-color); text-decoration: none;
+      transition: color var(--transition-speed), background-color var(--transition-speed);
+    }
+    .translation-item .search-link:hover { color: var(--hover-color); }
+    .translation-item .favorite-button {
+      margin-top: 0.5rem; background: transparent; border: 1px solid var(--primary-color);
+      color: var(--primary-color); border-radius: 4px; cursor: pointer; padding: 0.3rem 0.6rem;
+      transition: background var(--transition-speed), color var(--transition-speed);
+    }
+    .translation-item .favorite-button:hover { background: var(--primary-color); color: #000; }
+    /* 收藏结果中“预览”文字调整 */
+    .history-item .search-link {
+      display: inline-block; margin-top: 0.5rem; color: #fff; text-decoration: none;
+      transition: color var(--transition-speed); font-weight: bold;
+    }
+    .history-item .search-link:hover { color: var(--visited-color); }
+    /* 历史记录与收藏 */
+    #history h3, #favorites h3 { color: #fff; margin-bottom: 0.5rem; }
+    .history-item {
+      padding: 0.8rem; margin: 0.3rem 0; background: rgba(0,0,0,0.2); border-radius: 6px;
+      cursor: pointer; transition: background var(--transition-speed);
+      display: flex; justify-content: space-between; align-items: center; color: #fff;
+    }
+    .history-item:hover { background: rgba(0,243,255,0.1); }
+    .delete-history {
+      background: transparent; border: none; color: var(--primary-color); font-size: 1.2rem;
+      cursor: pointer; padding: 0; transition: color var(--transition-speed);
+    }
+    .delete-history:hover { color: var(--hover-color); }
+    #historyList, #favoritesList { max-height: 200px; overflow-y: auto; }
+    /* loading spinner */
+    #loadingSpinner { display: none; text-align: center; margin: 1rem 0; }
+    .spinner {
+      width: 40px; height: 40px; border: 4px solid rgba(0,243,255,0.2);
+      border-top: 4px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    /* 模态框 */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); z-index: 1001; justify-content: center; align-items: center;
+      animation: fadeIn 0.3s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-content {
+      background: var(--container-bg); backdrop-filter: blur(12px); border: var(--glass-border);
+      border-radius: 16px; padding: 2rem; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 1rem; right: 1rem; background: transparent; border: none;
+      color: var(--primary-color); font-size: 1.5rem; cursor: pointer;
+    }
+    .modal h2 { margin-top: 0; text-align: center; color: var(--primary-color); }
+    #configList label { display: block; margin: 0.5rem 0; color: #fff; }
+    /* 移动端优化 */
+    @media (max-width: 600px) {
+      .container { padding: 1rem; width: 95%; }
+      .input-group { flex-direction: column; }
+      button { width: 100%; margin-top: 0.5rem; }
+      .modal-content { padding: 1rem; max-height: 90vh; }
+    }
+    /* 搜索结果区域平铺展示 */
+    #output {
+      width: 100%; max-width: 100%; padding: 1rem; overflow-y: auto; overflow-x: hidden;
+      box-sizing: border-box; background: rgba(0,0,0,0.1); display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;
+    }
+    /* 当搜索结果为空时，隐藏该区域 */
+    #output:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>跨语界·智能搜索</h1>
+    
+    <section id="inputWrapper">
+      <div class="input-group">
+        <input type="text" id="inputText" placeholder="输入中文内容... " aria-label="搜索关键词">
+        <!-- 新增语音输入按钮 -->
+        <button id="voiceBtn" title="语音输入">🎤</button>
+        <button id="clearInputButton" aria-label="清空输入">⟳ 清空</button>
+        <div class="autocomplete-list" id="autocompleteList" role="listbox"></div>
+      </div>
+      <p id="inputHint">输入关键词后点击下方按钮进行智能搜索</p>
+      <!-- 新增语音状态反馈 -->
+      <div id="voiceStatus"></div>
+      <!-- 新增语音提示：列举了尽可能多的提示词，帮助用户快速掌握指令 -->
+      <div id="voiceTip">
+        语音提示词：例如 "天气用谷歌浏览器搜索"、"最新新闻必应搜索"、"翻译成所有语言搜索咖啡"、"体育新闻谷歌搜索"、"谷歌搜索世界杯新闻"、"天气用谷歌浏览器搜索"、"天气通过美国搜索"、"在谷歌中搜索美食推荐" 等等。
+      </div>
+    </section>
+
+    <section class="search-engine-group">
+      <select id="searchEngineSelect">
+        <option value="all">选择搜索引擎（默认搜索全部结果）</option>
+      </select>
+      <button id="configBtn" aria-label="配置搜索引擎">⚙️ 引擎配置</button>
+    </section>
+
+    <section class="translation-engine-group">
+      <select id="translationEngineSelect">
+        <option value="mymemory">MyMemory 翻译</option>
+        <option value="google">Google 翻译</option>
+      </select>
+    </section>
+
+    <!-- 高级搜索设置 -->
+    <button id="toggleAdvancedBtn">显示高级搜索设置</button>
+    <section id="advancedOptions">
+      <h3>高级搜索设置</h3>
+      <div>
+        <label>时间筛选:
+          <select id="timeFilter">
+            <option value="">不限时间</option>
+            <option value="24h">过去24小时</option>
+            <option value="week">过去一周</option>
+            <option value="month">过去一个月</option>
+            <option value="year">过去一年</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>地区筛选:
+          <select id="regionFilter">
+            <option value="">不限地区</option>
+            <option value="us">美国</option>
+            <option value="cn">中国</option>
+            <option value="uk">英国</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>语言筛选:
+          <select id="languageFilter">
+            <option value="">不限语言</option>
+            <option value="en">英文</option>
+            <option value="zh">中文</option>
+            <option value="es">西班牙语</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <!-- 翻译按钮 -->
+    <button id="translateButton" aria-label="智能翻译搜索">🚀 智能翻译搜索</button>
+
+    <div id="loadingSpinner">
+      <div class="spinner"></div>
+    </div>
+
+    <section id="history">
+      <h3>最近搜索</h3>
+      <div id="historyList"></div>
+      <button id="clearHistoryButton">清空历史记录</button>
+    </section>
+
+    <section id="favorites">
+      <h3>收藏的搜索结果</h3>
+      <div id="favoritesList"></div>
+      <button id="clearFavoritesButton">清空收藏</button>
+    </section>
+
+    <!-- 界面设置区域及显示界面设置按钮（保持在主容器内） -->
+    <button id="toggleUIBtn">显示界面设置</button>
+    <section id="uiSettings">
+      <h3>界面设置</h3>
+      <button id="toggleThemeButton">切换主题</button>
+      <label>
+        字体大小:
+        <input type="range" id="fontSizeRange" min="12" max="24" value="16">
+      </label>
+    </section>
+  </main>
+
+  <!-- 搜索结果区域平铺展示 -->
+  <section id="output">
+    <!-- 搜索结果将以平铺的方式展示在这里 -->
+  </section>
+
+  <!-- 模态框 -->
+  <div class="modal" id="configModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-content">
+      <button class="modal-close" id="modalClose" aria-label="关闭">&times;</button>
+      <h2 id="modalTitle">自定义搜索引擎</h2>
+      <div id="configList"></div>
+      <button id="saveConfigBtn">保存配置</button>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      'use strict';
+      
+      // 初始时隐藏整个页面的垂直滚动条
+      document.documentElement.style.overflowY = "hidden";
+      document.body.style.overflowY = "hidden";
+
+      // 防抖函数
+      function debounce(func, delay) {
+        let timer;
+        return function(...args) {
+          clearTimeout(timer);
+          timer = setTimeout(() => { func.apply(this, args); }, delay);
+        };
+      }
+
+      // 语音输入与语音控制扩展（改进版）
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = false;
+        recognition.interimResults = true; // 开启中间结果反馈
+
+        // 更新状态信息
+        recognition.onstart = function() {
+          document.getElementById('voiceStatus').textContent = '开始语音识别...';
+        };
+        recognition.onend = function() {
+          if(!document.getElementById('voiceStatus').textContent.includes('正在识别')) {
+            document.getElementById('voiceStatus').textContent = '';
+          }
+        };
+
+        document.getElementById('voiceBtn').addEventListener('click', function(){
+          recognition.start();
+        });
+
+        // 定义更多语音指令匹配模式（这里增加了更多可能的变体）
+        const patterns = [
+          // 新增：匹配格式 "谷歌搜索世界杯新闻"
+          { regex: /^(谷歌|google)搜索(.+)$/, hasEngine: true },
+          { regex: /(.+?)用(.+?)浏览器搜索/, hasEngine: true },
+          { regex: /搜索(.+?)用(.+?)浏览器/, hasEngine: true },
+          { regex: /(.+?)通过(.+?)搜索/, hasEngine: true },
+          { regex: /(.+?)选(.+?)搜索/, hasEngine: true },
+          { regex: /^(?:请\s*)?搜索\s*(.+)/, hasEngine: false },
+          { regex: /^(?:请\s*)?(?:帮我\s*)?(?:搜索|查找|找一下)\s*(.+?)(?:的(?:结果|信息))?$/, hasEngine: false },
+          { regex: /(.+?)在(.+?)上搜索/, hasEngine: true },
+          { regex: /^(?:请\s*)?(?:给我\s*)?(?:查找|搜索)(?:一下)?\s*(.+)$/, hasEngine: false },
+          { regex: /^(?:请\s*)?(?:帮我\s*)?(?:找一找|搜一搜)\s*(.+?)(?:的(?:结果|详情))?$/, hasEngine: false },
+          { regex: /^(?:请\s*)?(?:帮我\s*)?(?:打开|查找)\s*(.+?)(?:的)?\s*(?:网页|信息)$/, hasEngine: false },
+          { regex: /^(?:请\s*)?(?:帮我)?(?:查查|看看|搜索一下|找一下)\s*(.+?)(?:的(?:信息|详情))?$/, hasEngine: false },
+          { regex: /^(?:请问|请帮我|我要知道)\s*(.+?)(?:的(?:信息|情况|详情))?$/, hasEngine: false },
+          { regex: /^(.+?)的(?:新闻|报道)$/, hasEngine: false },
+          // 用户先说搜索引擎，再说查询内容，如：“百度查询天气预报”
+          { regex: /^(.+?)\s*查询\s*(.+)$/, hasEngine: true },
+          // 类似“在百度中查找天气预报”
+          { regex: /^(?:在)?(.+?)\s*(?:中)?\s*(?:搜索|查找|查询)\s*(.+)$/, hasEngine: true },
+          // 新增：匹配“关键词+百度搜索”或“关键词+必应搜索”
+          { regex: /^(.+?)(百度|必应|bing)搜索$/, hasEngine: true },
+          // 新增：更宽泛的模式，匹配“请搜一下…”、“帮我查一下…”等
+          { regex: /^(?:请|帮我)?\s*(.+?)(?:查一下|搜一下|找一下)$/, hasEngine: false }
+        ];
+
+        // 定义多语言搜索的目标语言列表
+        const multiLanguages = [
+          { code: 'zh', label: '中文' },
+          { code: 'en', label: '英文' },
+          { code: 'es', label: '西班牙语' },
+          { code: 'fr', label: '法语' },
+          { code: 'de', label: '德语' },
+          { code: 'ja', label: '日语' },
+          { code: 'ko', label: '韩语' },
+          { code: 'ru', label: '俄语' },
+          { code: 'it', label: '意大利语' },
+          { code: 'pt', label: '葡萄牙语' }
+        ];
+
+        // 新增多语言搜索功能：对指定查询分别翻译成多语言后生成谷歌搜索链接
+        async function multiLanguageSearch(query) {
+          dom.loadingSpinner.style.display = 'block';
+          try {
+            let results = await Promise.all(
+              multiLanguages.map(langObj =>
+                translateText(query, langObj.code, dom.translationEngineSelect.value)
+                  .then(translated => ({
+                    label: langObj.label,
+                    translated: translated,
+                    url: "https://www.google.com/search?q=" + encodeURIComponent(translated)
+                  }))
+              )
+            );
+            dom.outputDiv.innerHTML = results.map(result => `
+              <div class="translation-item">
+                <p>${result.label}: ${escapeHtml(result.translated)}</p>
+                <a class="search-link" href="${result.url}" target="_blank">谷歌搜索</a>
+              </div>
+            `).join('');
+          } catch (error) {
+            alert("多语言搜索出错：" + error.message);
+          } finally {
+            dom.loadingSpinner.style.display = 'none';
+          }
+        }
+
+        recognition.onresult = function(event) {
+          let interimTranscript = '';
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          if (interimTranscript) {
+            document.getElementById('voiceStatus').textContent = '正在识别：' + interimTranscript;
+          }
+          if (finalTranscript) {
+            document.getElementById('voiceStatus').textContent = '';
+            let transcript = finalTranscript.trim();
+            // 如果包含“翻译成所有语言搜索”，则触发多语言搜索（也可通过单独指令触发）
+            if (transcript.includes("翻译成所有语言搜索")) {
+              let query = transcript.replace("翻译成所有语言搜索", "").trim();
+              multiLanguageSearch(query);
+              return;
+            }
+            let query = "";
+            let engineName = "";
+            let matched = false;
+            for (let item of patterns) {
+              let match = transcript.match(item.regex);
+              if (match) {
+                if (item.hasEngine && match.length >= 3) {
+                  query = match[1].trim();
+                  engineName = match[2].trim();
+                } else {
+                  query = match[match.length - 1].trim();
+                  engineName = "";
+                }
+                matched = true;
+                break;
+              }
+            }
+            // 如果匹配到指令中含有特定搜索引擎词（如“谷歌”、“百度”、“必应”），则调用多语言搜索
+            if (matched && engineName && (engineName === "谷歌" || engineName.toLowerCase() === "google" ||
+                engineName === "百度" || engineName === "必应" || engineName.toLowerCase() === "bing")) {
+              multiLanguageSearch(query);
+              return;
+            }
+            if (query && engineName) {
+              document.getElementById('inputText').value = query;
+              const engineMapping = {
+                "美国": "us",
+                "英国": "gb",
+                "澳大利亚": "au",
+                "加拿大": "ca",
+                "印度": "in",
+                "西班牙": "es",
+                "墨西哥": "mx",
+                "巴西": "br",
+                "阿根廷": "ar",
+                "智利": "cl",
+                "法国": "fr",
+                "德国": "de",
+                "意大利": "it",
+                "荷兰": "nl",
+                "俄罗斯": "ru",
+                "乌克兰": "ua",
+                "波兰": "pl",
+                "捷克": "cz",
+                "匈牙利": "hu",
+                "罗马尼亚": "ro",
+                "土耳其": "tr",
+                "伊朗": "ir",
+                "沙特": "sa",
+                "日本": "jp",
+                "韩国": "kr",
+                "泰国": "th",
+                "越南": "vi",
+                "印度尼西亚": "id",
+                "马来西亚": "my",
+                "菲律宾": "ph",
+                "新加坡": "sg",
+                "南非": "za",
+                "埃及": "eg",
+                "肯尼亚": "ke",
+                "尼日利亚": "ng",
+                "巴基斯坦": "pk",
+                "孟加拉国": "bd",
+                "瑞典": "se",
+                "丹麦": "dk",
+                "芬兰": "fi",
+                "挪威": "no",
+                "瑞士 (德语)": "ch-de",
+                "瑞士 (法语)": "ch-fr",
+                "瑞士 (意大利语)": "ch-it",
+                "新西兰": "nz",
+                "香港": "google-hk",
+                "台湾": "google-tw",
+                "以色列": "walla"
+              };
+              if(engineMapping[engineName]) {
+                document.getElementById('searchEngineSelect').value = engineMapping[engineName];
+              }
+              document.getElementById('translateButton').click();
+            } else if (query) {
+              document.getElementById('inputText').value = query;
+            } else {
+              document.getElementById('inputText').value = transcript;
+            }
+          }
+        };
+
+        recognition.onerror = function(event) {
+          console.error('语音识别错误：', event.error);
+          document.getElementById('voiceStatus').textContent = '识别错误：' + event.error;
+        };
+      } else {
+        document.getElementById('voiceBtn').style.display = 'none';
+        console.warn('当前浏览器不支持语音识别');
+      }
+      
+      // 静态建议、热门关键词及拼写纠错映射
+      const staticSuggestions = ['中文', '翻译', '搜索', '跨语界', '智能'];
+      const trendingSuggestions = ['热门搜索', '最新资讯', '实时动态'];
+      const spellingCorrections = {
+        "搜搜": "搜索",
+        "翻译错": "翻译错误",
+        "跨语": "跨语界",
+        "智搜": "智能搜索"
+      };
+      function getSpellingSuggestions(text) {
+        let suggestions = [];
+        for (let key in spellingCorrections) {
+          if (text.includes(key)) {
+            suggestions.push(spellingCorrections[key]);
+          }
+        }
+        return suggestions;
+      }
+
+      // 搜索引擎配置（示例，仅保留部分配置）
+      const searchEngines = {
+        'us': { name: 'Google 美国', url: 'https://www.google.com/search?q=', lang: 'en', enabled: true },
+        'gb': { name: 'Google 英国', url: 'https://www.google.co.uk/search?q=', lang: 'en', enabled: true },
+        'au': { name: 'Google 澳大利亚', url: 'https://www.google.com.au/search?q=', lang: 'en', enabled: true },
+        'ca': { name: 'Google 加拿大', url: 'https://www.google.ca/search?q=', lang: 'en', enabled: true },
+        'in': { name: 'Google 印度', url: 'https://www.google.co.in/search?q=', lang: 'hi', enabled: true },
+        'es': { name: 'Google 西班牙', url: 'https://www.google.es/search?q=', lang: 'es', enabled: true },
+        'mx': { name: 'Google 墨西哥', url: 'https://www.google.com.mx/search?q=', lang: 'es', enabled: true },
+        'br': { name: 'Google 巴西', url: 'https://www.google.com.br/search?q=', lang: 'pt', enabled: true },
+        'ar': { name: 'Google 阿根廷', url: 'https://www.google.com.ar/search?q=', lang: 'es', enabled: true },
+        'cl': { name: 'Google 智利', url: 'https://www.google.cl/search?q=', lang: 'es', enabled: true },
+        'fr': { name: 'Google 法国', url: 'https://www.google.fr/search?q=', lang: 'fr', enabled: true },
+        'de': { name: 'Google 德国', url: 'https://www.google.de/search?q=', lang: 'de', enabled: true },
+        'it': { name: 'Google 意大利', url: 'https://www.google.it/search?q=', lang: 'it', enabled: true },
+        'nl': { name: 'Google 荷兰', url: 'https://www.google.nl/search?q=', lang: 'nl', enabled: true },
+        'ru': { name: 'Yandex 俄罗斯', url: 'https://yandex.ru/search/?text=', lang: 'ru', enabled: true },
+        'ua': { name: 'Google 乌克兰', url: 'https://www.google.com.ua/search?q=', lang: 'uk', enabled: true },
+        'pl': { name: 'Google 波兰', url: 'https://www.google.pl/search?q=', lang: 'pl', enabled: true },
+        'cz': { name: 'Seznam 捷克', url: 'https://www.seznam.cz/hledat?q=', lang: 'cs', enabled: true },
+        'hu': { name: 'Google 匈牙利', url: 'https://www.google.hu/search?q=', lang: 'hu', enabled: true },
+        'ro': { name: 'Google 罗马尼亚', url: 'https://www.google.ro/search?q=', lang: 'ro', enabled: true },
+        'tr': { name: 'Google 土耳其', url: 'https://www.google.com.tr/search?q=', lang: 'tr', enabled: true },
+        'ir': { name: 'Parsijoo 伊朗', url: 'https://www.parsijoo.ir/web/search?q=', lang: 'fa', enabled: true },
+        'sa': { name: 'Google 沙特', url: 'https://www.google.com.sa/search?q=', lang: 'ar', enabled: true },
+        'jp': { name: 'Yahoo! 日本', url: 'https://search.yahoo.co.jp/search?p=', lang: 'ja', enabled: true },
+        'kr': { name: 'Naver 韩国', url: 'https://search.naver.com/search.naver?query=', lang: 'ko', enabled: true },
+        'th': { name: 'Google 泰国', url: 'https://www.google.co.th/search?q=', lang: 'th', enabled: true },
+        'vi': { name: 'Cốc Cốc 越南', url: 'https://coccoc.com/search#query=', lang: 'vi', enabled: true },
+        'id': { name: 'Google 印度尼西亚', url: 'https://www.google.co.id/search?q=', lang: 'id', enabled: true },
+        'my': { name: 'Google 马来西亚', url: 'https://www.google.com.my/search?q=', lang: 'ms', enabled: true },
+        'ph': { name: 'Google 菲律宾', url: 'https://www.google.com.ph/search?q=', lang: 'tl', enabled: true },
+        'sg': { name: 'Google 新加坡', url: 'https://www.google.com.sg/search?q=', lang: 'en', enabled: true },
+        'za': { name: 'Google 南非', url: 'https://www.google.co.za/search?q=', lang: 'en', enabled: true },
+        'eg': { name: 'Google 埃及', url: 'https://www.google.com.eg/search?q=', lang: 'ar', enabled: true },
+        'ke': { name: 'Google 肯尼亚', url: 'https://www.google.co.ke/search?q=', lang: 'en', enabled: true },
+        'ng': { name: 'Google 尼日利亚', url: 'https://www.google.com.ng/search?q=', lang: 'en', enabled: true },
+        'pk': { name: 'Google 巴基斯坦', url: 'https://www.google.com.pk/search?q=', lang: 'ur', enabled: true },
+        'bd': { name: 'Google 孟加拉国', url: 'https://www.google.com.bd/search?q=', lang: 'bn', enabled: true },
+        'se': { name: 'Google 瑞典', url: 'https://www.google.se/search?q=', lang: 'sv', enabled: true },
+        'dk': { name: 'Google 丹麦', url: 'https://www.google.dk/search?q=', lang: 'da', enabled: true },
+        'fi': { name: 'Google 芬兰', url: 'https://www.google.fi/search?q=', lang: 'fi', enabled: true },
+        'no': { name: 'Google 挪威', url: 'https://www.google.no/search?q=', lang: 'no', enabled: true },
+        'ch-de': { name: 'Google 瑞士 (德语)', url: 'https://www.google.ch/search?q=', lang: 'de', enabled: true },
+        'ch-fr': { name: 'Google 瑞士 (法语)', url: 'https://www.google.ch/search?q=', lang: 'fr', enabled: true },
+        'ch-it': { name: 'Google 瑞士 (意大利语)', url: 'https://www.google.ch/search?q=', lang: 'it', enabled: true },
+        'nz': { name: 'Google 新西兰', url: 'https://www.google.co.nz/search?q=', lang: 'en', enabled: true },
+        'bing': { name: 'Bing 美国', url: 'https://www.bing.com/search?q=', lang: 'en', enabled: true },
+        'duck': { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=', lang: 'en', enabled: true },
+        'eco': { name: 'Ecosia 德国', url: 'https://www.ecosia.org/search?q=', lang: 'de', enabled: true },
+        'qnt': { name: 'Qwant 法国', url: 'https://www.qwant.com/?q=', lang: 'fr', enabled: true },
+        'sp': { name: 'Startpage 荷兰', url: 'https://www.startpage.com/do/search?q=', lang: 'nl', enabled: true },
+        'ask': { name: 'Ask 美国', url: 'https://www.ask.com/web?q=', lang: 'en', enabled: true },
+        'swisscows': { name: 'Swisscows 欧洲', url: 'https://swisscows.com/web?query=', lang: 'en', enabled: true },
+        'mojeek': { name: 'Mojeek 英国', url: 'https://www.mojeek.com/search?q=', lang: 'en', enabled: true },
+        'metager': { name: 'MetaGer 德国', url: 'https://metager.org/meta/meta.ger3?eingabe=', lang: 'de', enabled: true },
+        'yahoo-us': { name: 'Yahoo! 美国', url: 'https://search.yahoo.com/search?p=', lang: 'en', enabled: true },
+        'yahoo-in': { name: 'Yahoo! 印度', url: 'https://in.search.yahoo.com/search?p=', lang: 'hi', enabled: true },
+        'aol': { name: 'AOL', url: 'https://search.aol.com/aol/search?q=', lang: 'en', enabled: true },
+        'daum': { name: 'Daum 韩国', url: 'https://search.daum.net/search?q=', lang: 'ko', enabled: true },
+        'exalead': { name: 'Exalead', url: 'https://www.exalead.com/search/web/results/?q=', lang: 'en', enabled: true },
+        'dogpile': { name: 'Dogpile', url: 'https://www.dogpile.com/serp?q=', lang: 'en', enabled: true },
+        'yahoo-tw': { name: 'Yahoo! 台湾', url: 'https://tw.search.yahoo.com/search?p=', lang: 'en', enabled: true },
+        'yahoo-hk': { name: 'Yahoo! 香港', url: 'https://hk.search.yahoo.com/search?p=', lang: 'en', enabled: true },
+        'google-hk': { name: 'Google 香港', url: 'https://www.google.com.hk/search?q=', lang: 'en', enabled: true },
+        'google-tw': { name: 'Google 台湾', url: 'https://www.google.com.tw/search?q=', lang: 'en', enabled: true },
+        'walla': { name: 'Walla! 以色列', url: 'https://www.walla.co.il/search?query=', lang: 'he', enabled: true },
+        'gigablast': { name: 'Gigablast', url: 'https://www.gigablast.com/search?q=', lang: 'en', enabled: true },
+        'lycos': { name: 'Lycos', url: 'https://search.lycos.com/web/?q=', lang: 'en', enabled: true },
+        'yahoo-us2': { name: 'Yahoo! 美国 (备用)', url: 'https://search.yahoo.com/search?p=', lang: 'en', enabled: true },
+        'google-hk2': { name: 'Google 香港 (备用)', url: 'https://www.google.com.hk/search?q=', lang: 'en', enabled: true },
+        'google-tw2': { name: 'Google 台湾 (备用)', url: 'https://www.google.com.tw/search?q=', lang: 'en', enabled: true },
+        'gigablast2': { name: 'Gigablast (备用)', url: 'https://www.gigablast.com/search?q=', lang: 'en', enabled: true }
+      };
+
+      const savedSearchEnginesConfig = localStorage.getItem("searchEnginesConfig");
+      if (savedSearchEnginesConfig) {
+        const savedConfig = JSON.parse(savedSearchEnginesConfig);
+        for (const key in savedConfig) {
+          if (searchEngines.hasOwnProperty(key)) {
+            searchEngines[key].enabled = savedConfig[key].enabled;
+          }
+        }
+      }
+
+      const dom = {
+        inputText: document.getElementById("inputText"),
+        translateButton: document.getElementById("translateButton"),
+        outputDiv: document.getElementById("output"),
+        loadingSpinner: document.getElementById("loadingSpinner"),
+        historyList: document.getElementById("historyList"),
+        clearHistoryButton: document.getElementById("clearHistoryButton"),
+        searchEngineSelect: document.getElementById("searchEngineSelect"),
+        configBtn: document.getElementById("configBtn"),
+        configModal: document.getElementById("configModal"),
+        modalClose: document.getElementById("modalClose"),
+        configList: document.getElementById("configList"),
+        saveConfigBtn: document.getElementById("saveConfigBtn"),
+        autocompleteList: document.getElementById("autocompleteList"),
+        clearInputButton: document.getElementById("clearInputButton"),
+        translationEngineSelect: document.getElementById("translationEngineSelect"),
+        timeFilter: document.getElementById("timeFilter"),
+        regionFilter: document.getElementById("regionFilter"),
+        languageFilter: document.getElementById("languageFilter"),
+        favoritesList: document.getElementById("favoritesList"),
+        clearFavoritesButton: document.getElementById("clearFavoritesButton"),
+        toggleThemeButton: document.getElementById("toggleThemeButton"),
+        fontSizeRange: document.getElementById("fontSizeRange"),
+        toggleAdvancedBtn: document.getElementById("toggleAdvancedBtn"),
+        advancedOptions: document.getElementById("advancedOptions"),
+        toggleUIBtn: document.getElementById("toggleUIBtn"),
+        uiSettings: document.getElementById("uiSettings")
+      };
+
+      let historyData = JSON.parse(localStorage.getItem("history")) || [];
+      let favoritesData = JSON.parse(localStorage.getItem("favorites")) || [];
+
+      function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+      }
+
+      function renderHistory() {
+        dom.historyList.innerHTML = historyData.map((item, index) => `
+          <div class="history-item" data-index="${index}">
+            <span>${escapeHtml(item.text)}</span>
+            <button class="delete-history" data-index="${index}" aria-label="删除该历史记录">×</button>
+          </div>
+        `).join('');
+        dom.clearHistoryButton.style.display = historyData.length ? 'block' : 'none';
+      }
+
+      function renderFavorites() {
+        dom.favoritesList.innerHTML = favoritesData.map((item, index) => `
+          <div class="history-item" data-index="${index}">
+            <span>${escapeHtml(item.engine)} - ${escapeHtml(item.query)}</span>
+            <a class="search-link" href="${item.url}" target="_blank">预览</a>
+            <button class="delete-favorite" data-index="${index}" aria-label="删除收藏">×</button>
+          </div>
+        `).join('');
+        dom.clearFavoritesButton.style.display = favoritesData.length ? 'block' : 'none';
+      }
+
+      function saveToHistory(text, language) {
+        if (!text) return;
+        const exists = historyData.some(item => item.text === text && item.language === language);
+        if (!exists) {
+          historyData.unshift({ text, language });
+          if (historyData.length > 10) historyData.pop();
+          localStorage.setItem("history", JSON.stringify(historyData));
+          renderHistory();
+        }
+      }
+
+      function saveFavorite(result) {
+        const exists = favoritesData.some(item => item.url === result.url);
+        if (!exists) {
+          favoritesData.unshift(result);
+          localStorage.setItem("favorites", JSON.stringify(favoritesData));
+          renderFavorites();
+        }
+      }
+
+      function buildSearchUrl(engine, query) {
+        let url = engine.url + encodeURIComponent(query);
+        let params = [];
+        if (dom.timeFilter.value) {
+          if (engine.url.includes("google")) {
+            if (dom.timeFilter.value === "24h") params.push("qdr:d");
+            if (dom.timeFilter.value === "week") params.push("qdr:w");
+            if (dom.timeFilter.value === "month") params.push("qdr:m");
+            if (dom.timeFilter.value === "year") params.push("qdr:y");
+          } else {
+            params.push("time=" + encodeURIComponent(dom.timeFilter.value));
+          }
+        }
+        if (dom.regionFilter.value) {
+          if (engine.url.includes("google")) {
+            params.push("cr=country" + dom.regionFilter.value.toUpperCase());
+          } else {
+            params.push("region=" + encodeURIComponent(dom.regionFilter.value));
+          }
+        }
+        if (dom.languageFilter.value) {
+          if (engine.url.includes("google")) {
+            params.push("lr=lang_" + dom.languageFilter.value);
+          } else {
+            params.push("lang=" + encodeURIComponent(dom.languageFilter.value));
+          }
+        }
+        if (params.length > 0) {
+          if (engine.url.includes("google")) {
+            const tbsParams = params.filter(p => p.startsWith("qdr:"));
+            const otherParams = params.filter(p => p.startsWith("cr=") || p.startsWith("lr="));
+            if (tbsParams.length > 0) {
+              url += "&tbs=" + tbsParams.join(",");
+            }
+            otherParams.forEach(p => { url += "&" + p; });
+          } else {
+            url += "&" + params.join("&");
+          }
+        }
+        return url;
+      }
+
+      async function translateText(text, targetLang, translationEngine) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        try {
+          let response, data, translated = '';
+          if (translationEngine === 'mymemory') {
+            response = await fetch(
+              `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=zh|${targetLang}`,
+              { signal: controller.signal }
+            );
+            clearTimeout(timeoutId);
+            if (!response.ok) throw new Error('网络请求失败');
+            data = await response.json();
+            translated = data.responseData?.translatedText || '翻译失败';
+          } else if (translationEngine === 'google') {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!response.ok) throw new Error('网络请求失败');
+            data = await response.json();
+            translated = data[0]?.[0]?.[0] || '翻译失败';
+          } else {
+            throw new Error('未知翻译引擎');
+          }
+          translated = translated.replace(/<ex[^>]*\/>/g, '').trim();
+          return translated;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw new Error(`翻译错误: ${error.message}`);
+        }
+      }
+
+      function initSearchEngineSelect() {
+        const select = dom.searchEngineSelect;
+        select.innerHTML = '<option value="all">选择搜索引擎（默认搜索全部结果）</option>';
+        Object.entries(searchEngines).forEach(([key, engine]) => {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = engine.name;
+          select.appendChild(option);
+        });
+      }
+
+      function renderConfigList() {
+        dom.configList.innerHTML = Object.entries(searchEngines).map(([key, engine]) => `
+          <label>
+            <input type="checkbox" value="${key}" ${engine.enabled ? 'checked' : ''}>
+            ${engine.name}
+          </label>
+        `).join('');
+      }
+
+      // 自动补全
+      dom.inputText.addEventListener('input', debounce((e) => {
+        const query = e.target.value.trim();
+        if (!query) {
+          dom.autocompleteList.style.display = 'none';
+          return;
+        }
+        const historySuggestions = historyData.map(item => item.text);
+        const corrections = getSpellingSuggestions(query);
+        const suggestions = Array.from(new Set([...historySuggestions, ...staticSuggestions, ...trendingSuggestions, ...corrections]));
+        const filtered = suggestions.filter(item => item.includes(query));
+        if (filtered.length) {
+          dom.autocompleteList.innerHTML = filtered.map(item => `
+            <div class="autocomplete-item" tabindex="0">${escapeHtml(item)}</div>
+          `).join('');
+          dom.autocompleteList.style.display = 'block';
+        } else {
+          dom.autocompleteList.style.display = 'none';
+        }
+      }, 300));
+
+      dom.inputText.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          const firstItem = dom.autocompleteList.querySelector('.autocomplete-item');
+          if (firstItem) {
+            firstItem.focus();
+            e.preventDefault();
+          }
+        }
+      });
+      dom.autocompleteList.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          const next = e.target.nextElementSibling;
+          if (next) {
+            next.focus();
+          }
+          e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+          const prev = e.target.previousElementSibling;
+          if (prev) {
+            prev.focus();
+          } else {
+            dom.inputText.focus();
+          }
+          e.preventDefault();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target.classList.contains('autocomplete-item')) {
+            dom.inputText.value = e.target.textContent;
+            dom.autocompleteList.style.display = 'none';
+            e.preventDefault();
+          }
+        }
+      });
+      dom.autocompleteList.addEventListener('click', e => {
+        if (e.target.classList.contains('autocomplete-item')) {
+          dom.inputText.value = e.target.textContent;
+          dom.autocompleteList.style.display = 'none';
+        }
+      });
+      dom.clearInputButton.addEventListener('click', () => {
+        dom.inputText.value = '';
+        dom.autocompleteList.style.display = 'none';
+      });
+
+      // 高级搜索设置折叠
+      dom.toggleAdvancedBtn.addEventListener('click', () => {
+        if (dom.advancedOptions.style.display === 'none' || dom.advancedOptions.style.display === '') {
+          dom.advancedOptions.style.display = 'block';
+          dom.toggleAdvancedBtn.textContent = '隐藏高级搜索设置';
+        } else {
+          dom.advancedOptions.style.display = 'none';
+          dom.toggleAdvancedBtn.textContent = '显示高级搜索设置';
+        }
+      });
+
+      // 界面设置折叠（原位置）
+      dom.toggleUIBtn.addEventListener('click', () => {
+        if (dom.uiSettings.style.display === 'none' || dom.uiSettings.style.display === '') {
+          dom.uiSettings.style.display = 'block';
+          dom.toggleUIBtn.textContent = '隐藏界面设置';
+        } else {
+          dom.uiSettings.style.display = 'none';
+          dom.toggleUIBtn.textContent = '显示界面设置';
+        }
+      });
+
+      // 翻译并构造搜索链接
+      dom.translateButton.addEventListener('click', async () => {
+        const text = dom.inputText.value.trim();
+        if (!text) return alert('请输入搜索内容');
+        dom.translateButton.disabled = true;
+        dom.loadingSpinner.style.display = 'block';
+        try {
+          const language = dom.searchEngineSelect.value;
+          const translationEngine = dom.translationEngineSelect.value;
+          let results = [];
+          if (language === 'all') {
+            results = await Promise.all(
+              Object.values(searchEngines)
+                .filter(engine => engine.enabled)
+                .map(engine =>
+                  translateText(text, engine.lang, translationEngine)
+                    .then(translated => ({ engine, translated, error: null }))
+                    .catch(error => ({ engine, translated: null, error: error.message }))
+                )
+            );
+          } else {
+            const engine = searchEngines[language];
+            let translated, error = null;
+            try {
+              translated = await translateText(text, engine.lang, translationEngine);
+            } catch(err) {
+              error = err.message;
+              translated = '';
+            }
+            results.push({ engine, translated, error });
+          }
+          dom.outputDiv.innerHTML = results.map(({ engine, translated, error }) => `
+            <div class="translation-item">
+              <p>${engine.name}：${error ? `<span style="color: red;">${escapeHtml(error)}</span>` : escapeHtml(translated)}</p>
+              <a class="search-link" href="${buildSearchUrl(engine, translated)}" target="_blank">立即搜索</a>
+              <button class="favorite-button" data-engine="${engine.name}" data-query="${translated}" data-url="${buildSearchUrl(engine, translated)}">收藏</button>
+            </div>
+          `).join('');
+          saveToHistory(text, language);
+          if (dom.outputDiv.innerHTML.trim() !== "") {
+            document.documentElement.style.overflowY = "auto";
+            document.body.style.overflowY = "auto";
+          }
+        } catch (error) {
+          alert(error.message);
+        } finally {
+          dom.translateButton.disabled = false;
+          dom.loadingSpinner.style.display = 'none';
+        }
+      });
+
+      // 收藏与删除收藏
+      document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('favorite-button')) {
+          const result = {
+            engine: e.target.dataset.engine,
+            query: e.target.dataset.query,
+            url: e.target.dataset.url
+          };
+          saveFavorite(result);
+        } else if (e.target.classList.contains('delete-favorite')) {
+          const index = parseInt(e.target.dataset.index);
+          favoritesData.splice(index, 1);
+          localStorage.setItem("favorites", JSON.stringify(favoritesData));
+          renderFavorites();
+        }
+      });
+      dom.clearHistoryButton.addEventListener('click', () => {
+        historyData = [];
+        localStorage.removeItem("history");
+        renderHistory();
+      });
+      dom.clearFavoritesButton.addEventListener('click', () => {
+        favoritesData = [];
+        localStorage.removeItem("favorites");
+        renderFavorites();
+      });
+      dom.historyList.addEventListener('click', e => {
+        if (e.target.classList.contains('delete-history')) {
+          const index = parseInt(e.target.dataset.index);
+          historyData.splice(index, 1);
+          localStorage.setItem("history", JSON.stringify(historyData));
+          renderHistory();
+        } else if (e.target.closest('.history-item')) {
+          const item = historyData[parseInt(e.target.closest('.history-item').dataset.index)];
+          dom.inputText.value = item.text;
+          dom.searchEngineSelect.value = item.language;
+        }
+      });
+      dom.configBtn.addEventListener('click', () => {
+        renderConfigList();
+        dom.configModal.style.display = 'flex';
+        dom.configModal.querySelector('input, button').focus();
+      });
+      dom.modalClose.addEventListener('click', () => {
+        dom.configModal.style.display = 'none';
+      });
+      dom.saveConfigBtn.addEventListener('click', () => {
+        const checkboxes = dom.configList.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+          searchEngines[checkbox.value].enabled = checkbox.checked;
+        });
+        const configToSave = {};
+        Object.entries(searchEngines).forEach(([key, engine]) => {
+          configToSave[key] = { enabled: engine.enabled };
+        });
+        localStorage.setItem("searchEnginesConfig", JSON.stringify(configToSave));
+        dom.configModal.style.display = 'none';
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dom.configModal.style.display === 'flex') {
+          dom.configModal.style.display = 'none';
+        }
+      });
+      // UI设置：主题切换与字体大小调节
+      dom.toggleThemeButton.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+      });
+      dom.fontSizeRange.addEventListener('input', (e) => {
+        document.documentElement.style.fontSize = e.target.value + 'px';
+      });
+      initSearchEngineSelect();
+      renderHistory();
+      renderFavorites();
+      
+      // 事件委托：点击搜索链接或收藏按钮后添加 .clicked 类
+      document.body.addEventListener('click', function(e) {
+        if (e.target.matches('.search-link, .favorite-button')) {
+          e.target.classList.add('clicked');
+        }
+      });
+      
+    })();
+  </script>
+</body>
+</html>
