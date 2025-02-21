@@ -491,6 +491,11 @@
           } catch (error) {
             alert("多语言搜索出错：" + error.message);
           } finally {
+            // 新增滚动条处理
+            if (dom.outputDiv.innerHTML.trim() !== "") {
+              document.documentElement.style.overflowY = "auto";
+              document.body.style.overflowY = "auto";
+            }
             dom.loadingSpinner.style.display = 'none';
           }
         }
